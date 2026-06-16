@@ -1,0 +1,8 @@
+{
+  "name": "xLearn",
+  "description": "AI-powered personalized learning platform where users can learn any skill, topic, hobby or curiosity through interactive custom curriculum, flashcards, real YouTube videos, and quizzes with robust analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Plan": {
+      "title": "Plan",
+      "description": "A learning or curiosity plan created by a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "timeframe": { "type": "string" },
+        "type": { "type": "string", "enum": ["skill", "academic", "hobby", "curiosity"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completed": { "type": "boolean" },
+        "currentSessionNumber": { "type": "integer" },
+        "totalSessions": { "type": "integer" },
+        "explanation": { "type": "string" },
+        "videos": { "type": "array" }
+      },
+      "required": ["id", "userId", "topic", "timeframe", "type", "createdAt"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "A specific learning session within a learning plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "planId": { "type": "string" },
+        "title": { "type": "string" },
+        "order": { "type": "integer" },
+        "summary": { "type": "string" },
+        "notes": { "type": "string" },
+        "flashcards": { "type": "array" },
+        "videos": { "type": "array" },
+        "quiz": { "type": "array" },
+        "status": { "type": "string", "enum": ["locked", "unlocked", "completed"] },
+        "quizCompleted": { "type": "boolean" },
+        "quizScore": { "type": "integer" },
+        "userQuizAnswers": { "type": "array" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "planId", "title", "order", "status"]
+    },
+    "Analytics": {
+      "title": "Analytics",
+      "description": "AI user diagnostics & coaching analytics",
+      "type": "object",
+      "properties": {
+        "totalPlans": { "type": "integer" },
+        "completedPlans": { "type": "integer" },
+        "totalQuizzesTaken": { "type": "integer" },
+        "averageQuizScore": { "type": "integer" },
+        "strengths": { "type": "array" },
+        "weaknesses": { "type": "array" },
+        "tips": { "type": "array" },
+        "lastAnalyzedAt": { "type": "string" }
+      },
+      "required": ["totalPlans", "completedPlans", "totalQuizzesTaken", "averageQuizScore", "strengths", "weaknesses", "tips"]
+    },
+    "CourseAnalysis": {
+      "title": "CourseAnalysis",
+      "description": "Graduation-level performance summary & diagnostic from the AI Performance Coach",
+      "type": "object",
+      "properties": {
+        "overallEvaluation": { "type": "string" },
+        "strengths": { "type": "array" },
+        "weaknesses": { "type": "array" },
+        "suggestions": { "type": "array" },
+        "analyzedAt": { "type": "string" }
+      },
+      "required": ["overallEvaluation", "strengths", "weaknesses", "suggestions", "analyzedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Access to specific user profiles"
+    },
+    "users/{userId}/analytics/{analyticsId}": {
+      "schema": "Analytics",
+      "description": "User diagnostic analytics and coaching feedback"
+    },
+    "plans/{planId}": {
+      "schema": "Plan",
+      "description": "The main learning plans collection"
+    },
+    "plans/{planId}/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Individual lessons/sessions for a plan"
+    },
+    "plans/{planId}/analysis/{analysisId}": {
+      "schema": "CourseAnalysis",
+      "description": "AI analysis of student performance upon roadmap completion"
+    }
+  }
+}

@@ -1,0 +1,149 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Catch-all Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common reusable helper functions
+    function isSignedIn() {
+      // Mandating verified email for standard security
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 2. Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().uid == existing().uid && 
+                    incoming().email == existing().email;
+      allow delete: if false;
+    }
+
+    // 3. User Diagnostics / Analytics Subcollection
+    match /users/{userId}/analytics/{analyticsId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(analyticsId) && isValidAnalytics(incoming());
+      allow update: if isOwner(userId) && isValidAnalytics(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['totalPlans', 'completedPlans', 'totalQuizzesTaken', 'averageQuizScore', 'strengths', 'weaknesses', 'tips', 'lastAnalyzedAt']);
+      allow delete: if isOwner(userId);
+    }
+
+    // 4. Plans Collection (Learning plans)
+    match /plans/{planId} {
+      function getPlan() {
+        return get(/databases/$(database)/documents/plans/$(planId)).data;
+      }
+
+      allow get: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidId(planId) && isValidPlan(incoming());
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidPlan(incoming()) &&
+                    incoming().id == existing().id &&
+                    incoming().userId == existing().userId &&
+                    incoming().topic == existing().topic &&
+                    incoming().timeframe == existing().timeframe &&
+                    incoming().type == existing().type &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['currentSessionNumber', 'completed', 'explanation', 'videos']);
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+
+      // 5. Sessions subcollection (Child of Plans - Nested to guarantee path bindings)
+      match /sessions/{sessionId} {
+        allow get: if isSignedIn() && getPlan().userId == request.auth.uid;
+        allow list: if isSignedIn() && getPlan().userId == request.auth.uid;
+        allow create: if isSignedIn() && getPlan().userId == request.auth.uid && isValidId(sessionId) && isValidSession(incoming()) && incoming().planId == planId;
+        allow update: if isSignedIn() && getPlan().userId == request.auth.uid && isValidSession(incoming()) &&
+                      incoming().id == existing().id &&
+                      incoming().planId == existing().planId &&
+                      incoming().order == existing().order &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['summary', 'notes', 'flashcards', 'videos', 'quiz', 'status', 'quizCompleted', 'quizScore', 'userQuizAnswers', 'completedAt', 'description']);
+        allow delete: if isSignedIn() && getPlan().userId == request.auth.uid;
+      }
+
+      // 6. Analysis subcollection (Child of Plans - Nested to guarantee path bindings)
+      match /analysis/{analysisId} {
+        allow get: if isSignedIn() && getPlan().userId == request.auth.uid;
+        allow create: if isSignedIn() && getPlan().userId == request.auth.uid && isValidId(analysisId) && isValidAnalysisDetailed(incoming());
+        allow update: if isSignedIn() && getPlan().userId == request.auth.uid && isValidAnalysisDetailed(incoming()) &&
+                      incoming().analyzedAt == existing().analyzedAt;
+        allow delete: if isSignedIn() && getPlan().userId == request.auth.uid;
+      }
+    }
+
+    // Validation functions
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 128 &&
+             (data.displayName == null || (data.displayName is string && data.displayName.size() <= 256)) &&
+             (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2048)) &&
+             (!data.keys().hasAny(['createdAt']) || (data.createdAt is string && data.createdAt.size() <= 128));
+    }
+
+    function isValidAnalytics(data) {
+      return data.totalPlans is int && data.totalPlans >= 0 &&
+             data.completedPlans is int && data.completedPlans >= 0 &&
+             data.totalQuizzesTaken is int && data.totalQuizzesTaken >= 0 &&
+             data.averageQuizScore is int && data.averageQuizScore >= 0 &&
+             data.strengths is list && data.strengths.size() <= 50 &&
+             data.weaknesses is list && data.weaknesses.size() <= 50 &&
+             data.tips is list && data.tips.size() <= 50 &&
+             (!data.keys().hasAny(['lastAnalyzedAt']) || (data.lastAnalyzedAt is string && data.lastAnalyzedAt.size() <= 128));
+    }
+
+    function isValidPlan(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.topic is string && data.topic.size() <= 500 &&
+             data.timeframe is string && data.timeframe.size() <= 100 &&
+             data.type is string && data.type in ['skill', 'academic', 'hobby', 'curiosity'] &&
+             data.completed is bool &&
+             data.currentSessionNumber is int && data.currentSessionNumber >= 1 &&
+             data.totalSessions is int && data.totalSessions >= 1 &&
+             (data.createdAt is timestamp || data.createdAt is string) &&
+             (!data.keys().hasAny(['explanation']) || (data.explanation is string && data.explanation.size() <= 50000)) &&
+             (!data.keys().hasAny(['videos']) || (data.videos is list && data.videos.size() <= 100));
+    }
+
+    function isValidSession(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.planId is string && data.planId.size() <= 128 &&
+             data.title is string && data.title.size() <= 500 &&
+             data.order is int && data.order >= 1 &&
+             data.status is string && data.status in ['locked', 'unlocked', 'completed'] &&
+             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 5000)) &&
+             (!data.keys().hasAny(['summary']) || (data.summary is string && data.summary.size() <= 10000)) &&
+             (!data.keys().hasAny(['notes']) || (data.notes is string && data.notes.size() <= 100000)) &&
+             (!data.keys().hasAny(['flashcards']) || (data.flashcards is list && data.flashcards.size() <= 100)) &&
+             (!data.keys().hasAny(['videos']) || (data.videos is list && data.videos.size() <= 100)) &&
+             (!data.keys().hasAny(['quiz']) || (data.quiz is list && data.quiz.size() <= 100)) &&
+             (!data.keys().hasAny(['quizCompleted']) || data.quizCompleted is bool) &&
+             (!data.keys().hasAny(['quizScore']) || (data.quizScore is int && data.quizScore >= 0)) &&
+             (!data.keys().hasAny(['userQuizAnswers']) || (data.userQuizAnswers is list && data.userQuizAnswers.size() <= 100)) &&
+             (!data.keys().hasAny(['completedAt']) || data.completedAt is string || data.completedAt is timestamp);
+    }
+
+    function isValidAnalysisDetailed(data) {
+      return data.overallEvaluation is string && data.overallEvaluation.size() <= 105000 &&
+             data.analyzedAt is string && data.analyzedAt.size() <= 128;
+    }
+  }
+}
