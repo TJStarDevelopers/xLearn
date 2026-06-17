@@ -98,9 +98,33 @@ export default function App() {
   const handleSignIn = async () => {
     try {
       const provider = new GoogleAuthProvider();
+      // Add language preference (optional)
+      provider.setCustomParameters({ prompt: 'consent' });
       await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error("Sign-in process triggered error:", err);
+    } catch (err: unknown) {
+      const error = err as any;
+      console.error("[v0] Sign-in error:", {
+        code: error.code,
+        message: error.message,
+        customData: error.customData
+      });
+      
+      // Provide user-friendly error messages
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.warn('User closed the OAuth popup');
+      } else if (error.code === 'auth/popup-blocked') {
+        console.error('Popup was blocked. Please allow popups for this site.');
+        alert('Sign-in failed: Popup was blocked. Please allow popups for this site.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        console.error('This domain is not authorized. Add it to Firebase Console → Authentication → Authorized Domains');
+        alert('Sign-in failed: Domain not authorized in Firebase. Please check Firebase Console settings.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        console.error('Google Sign-In is not enabled in Firebase');
+        alert('Sign-in failed: Google Sign-In not enabled. Please configure in Firebase Console.');
+      } else {
+        console.error('Unexpected sign-in error:', error);
+        alert(`Sign-in failed: ${error.message || 'Unknown error'}`);
+      }
     }
   };
 
