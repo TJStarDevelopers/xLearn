@@ -14,6 +14,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 
+// Enable permissive CORS middleware to allow cross-origin requests from platforms like novus.ai
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 const PORT = 3000;
 
 // Lazy initialization of Gemini client to prevent startup failure
