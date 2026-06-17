@@ -1,46 +1,135 @@
 /**
- * Pendo/Novus Analytics Tracking Utility
- * Provides wrapper functions for tracking user activities in xLearn
+ * Novus.ai (Pendo) Analytics Tracking Utility
+ * Properly authenticated and configured tracking for xLearn
  */
+
+// Declare Pendo on window
+declare global {
+  interface Window {
+    pendo?: any;
+  }
+}
 
 // Get the global pendo object
-const getPendoInstance = () => {
-  return (window as any).pendo;
+const getPendoInstance = (): any => {
+  return typeof window !== 'undefined' ? window.pendo : null;
 };
 
+// Store token globally
+let novusToken: string | null = null;
+
 /**
- * Initialize Pendo with user metadata
+ * Fetch Novus authentication token from server
  */
-export const initializePendo = (userId: string, email: string | null, displayName: string | null) => {
-  const pendo = getPendoInstance();
-  if (pendo && pendo.initialize) {
-    pendo.initialize({
+async function getNovusToken(): Promise<string> {
+  if (novusToken) {
+    return novusToken;
+  }
+
+  try {
+    const response = await fetch('/api/novus-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      console.error('[Novus] Token fetch failed:', response.statusText);
+      return '';
+    }
+
+    const data = await response.json();
+    novusToken = data.accessToken;
+    console.log('[Novus] Token acquired successfully');
+    return novusToken;
+  } catch (error) {
+    console.error('[Novus] Error fetching token:', error);
+    return '';
+  }
+}
+
+/**
+ * Initialize Pendo with user metadata and proper authentication
+ */
+export const initializePendo = async (userId: string, email: string | null, displayName: string | null) => {
+  try {
+    // Wait for Pendo SDK to load
+    let attempts = 0;
+    while (!window.pendo && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+
+    if (!window.pendo) {
+      console.warn('[Novus] Pendo SDK failed to load after timeout');
+      return;
+    }
+
+    // Get authentication token
+    const token = await getNovusToken();
+    if (!token) {
+      console.warn('[Novus] Could not obtain authentication token');
+      return;
+    }
+
+    // Initialize Pendo with app ID and authentication
+    window.pendo.initialize({
+      appId: '4798289792925696',
       visitor: {
         id: userId,
         email: email || undefined,
-        displayName: displayName || undefined
-      }
+        displayName: displayName || undefined,
+        custom: {
+          authenticated: true,
+          initTimestamp: new Date().toISOString()
+        }
+      },
+      // Use authenticated session
+      _authToken: token,
+      enableLogging: true
     });
+
+    console.log('[Novus] Pendo initialized with user:', userId);
+  } catch (error) {
+    console.error('[Novus] Initialization error:', error);
   }
 };
 
 /**
- * Track a generic event
+ * Track a generic event with Novus
  */
-export const trackEvent = (eventName: string, properties?: Record<string, any>) => {
-  const pendo = getPendoInstance();
-  if (pendo && pendo.track) {
-    pendo.track(eventName, properties || {});
-  } else {
-    console.log(`[Analytics] Event: ${eventName}`, properties);
+export const trackEvent = async (eventName: string, properties?: Record<string, any>) => {
+  try {
+    const pendo = getPendoInstance();
+    if (!pendo || !pendo.track) {
+      console.warn(`[Novus] Pendo not ready. Event queued: ${eventName}`, properties);
+      return;
+    }
+
+    // Send event to Novus with token authorization
+    const token = await getNovusToken();
+    if (!token) {
+      console.warn('[Novus] No token available for event tracking');
+      return;
+    }
+
+    // Use Pendo's track method with authentication headers
+    pendo.track(eventName, {
+      ...properties,
+      _authToken: token,
+      timestamp: new Date().toISOString()
+    });
+
+    console.log(`[Novus] Event tracked: ${eventName}`, properties);
+  } catch (error) {
+    console.error(`[Novus] Error tracking event ${eventName}:`, error);
   }
 };
 
 /**
  * Plan Created - when user submits new course form
  */
-export const trackPlanCreated = (planId: string, topic: string, planType: string, timeframe: string) => {
-  trackEvent('Plan Created', {
+export const trackPlanCreated = async (planId: string, topic: string, planType: string, timeframe: string) => {
+  await trackEvent('Plan Created', {
     planId,
     topic,
     planType,
@@ -50,21 +139,21 @@ export const trackPlanCreated = (planId: string, topic: string, planType: string
 };
 
 /**
- * Plan Opened - when user clicks "Enter Classroom"
+ * Plan Opened - when user enters a plan/classroom
  */
-export const trackPlanOpened = (planId: string, planTopic: string) => {
-  trackEvent('Plan Opened', {
+export const trackPlanOpened = async (planId: string, topic: string) => {
+  await trackEvent('Plan Opened', {
     planId,
-    planTopic,
+    topic,
     timestamp: new Date().toISOString()
   });
 };
 
 /**
- * Session Started - when user clicks "Start Session"
+ * Session Started - when user begins a study session
  */
-export const trackSessionStarted = (planId: string, sessionId: string, sessionTitle: string) => {
-  trackEvent('Session Started', {
+export const trackSessionStarted = async (planId: string, sessionId: string, sessionTitle: string) => {
+  await trackEvent('Session Started', {
     planId,
     sessionId,
     sessionTitle,
@@ -73,10 +162,10 @@ export const trackSessionStarted = (planId: string, sessionId: string, sessionTi
 };
 
 /**
- * Session Content Generated - when AI generates notes/flashcards/videos
+ * Session Content Generated - when AI generates study materials
  */
-export const trackSessionContentGenerated = (planId: string, sessionId: string, contentType: string) => {
-  trackEvent('Session Content Generated', {
+export const trackSessionContentGenerated = async (planId: string, sessionId: string, contentType: string) => {
+  await trackEvent('Session Content Generated', {
     planId,
     sessionId,
     contentType,
@@ -85,15 +174,16 @@ export const trackSessionContentGenerated = (planId: string, sessionId: string, 
 };
 
 /**
- * Quiz Submitted - when user submits evaluation quiz
+ * Quiz Submitted - when user completes a quiz
  */
-export const trackQuizSubmitted = (planId: string, sessionId: string, score: number, totalQuestions: number) => {
-  trackEvent('Quiz Submitted', {
+export const trackQuizSubmitted = async (planId: string, sessionId: string, score: number, totalQuestions: number) => {
+  const percentage = Math.round((score / totalQuestions) * 100);
+  await trackEvent('Quiz Submitted', {
     planId,
     sessionId,
     score,
     totalQuestions,
-    percentage: ((score / totalQuestions) * 100).toFixed(2),
+    percentage,
     timestamp: new Date().toISOString()
   });
 };
@@ -101,8 +191,8 @@ export const trackQuizSubmitted = (planId: string, sessionId: string, score: num
 /**
  * Session Completed - when user unlocks next session
  */
-export const trackSessionCompleted = (planId: string, sessionId: string, sessionTitle: string) => {
-  trackEvent('Session Completed', {
+export const trackSessionCompleted = async (planId: string, sessionId: string, sessionTitle: string) => {
+  await trackEvent('Session Completed', {
     planId,
     sessionId,
     sessionTitle,
@@ -111,36 +201,23 @@ export const trackSessionCompleted = (planId: string, sessionId: string, session
 };
 
 /**
- * Course Completed - when user finishes final session
+ * Course Completed - when entire curriculum is finished
  */
-export const trackCourseCompleted = (planId: string, planTopic: string, totalSessions: number) => {
-  trackEvent('Course Completed', {
+export const trackCourseCompleted = async (planId: string, courseName: string, totalSessions: number) => {
+  await trackEvent('Course Completed', {
     planId,
-    planTopic,
+    courseName,
     totalSessions,
-    timestamp: new Date().toISOString()
+    completionTimestamp: new Date().toISOString()
   });
 };
 
 /**
- * AI Diagnostic Requested - when user clicks "Perform AI Diagnostic"
+ * AI Diagnostic Requested - when user requests performance analysis
  */
-export const trackAIDiagnosticRequested = (userId: string) => {
-  trackEvent('AI Diagnostic Requested', {
+export const trackAIDiagnosticRequested = async (userId: string) => {
+  await trackEvent('AI Diagnostic Requested', {
     userId,
     timestamp: new Date().toISOString()
   });
-};
-
-export default {
-  initializePendo,
-  trackEvent,
-  trackPlanCreated,
-  trackPlanOpened,
-  trackSessionStarted,
-  trackSessionContentGenerated,
-  trackQuizSubmitted,
-  trackSessionCompleted,
-  trackCourseCompleted,
-  trackAIDiagnosticRequested
 };
