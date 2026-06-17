@@ -858,6 +858,45 @@ Provide high-yield diagnostic metrics assessing:
 // -------------------------------------------------------------
 // Vite Dev Server Integration & Static Asset Pipeline
 // -------------------------------------------------------------
+// Novus Analytics Token Endpoint - Get auth token for Novus tracking
+app.post("/api/novus-token", async (req, res) => {
+  try {
+    const clientId = "db1faccd-ee8b-49f1-bf23-62785e34cd0e";
+    const clientSecret = "68abc1247d316699bd8bc2d856f3080f9393f3b41c61e96559110e90daf45e7c";
+    const appId = "4798289792925696";
+
+    // Exchange credentials for bearer token with Novus API
+    const tokenResponse = await fetch("https://novus-api.pendo.io/mcp-auth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+        app_id: appId
+      }).toString()
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error("[Novus] Token fetch failed:", tokenResponse.status, errorText);
+      return res.status(401).json({ error: "Failed to authenticate with Novus" });
+    }
+
+    const tokenData = await tokenResponse.json();
+    return res.json({
+      accessToken: tokenData.access_token,
+      tokenType: tokenData.token_type || "Bearer",
+      expiresIn: tokenData.expires_in
+    });
+  } catch (error: any) {
+    console.error("[Novus] Token endpoint error:", error);
+    return res.status(500).json({ error: "Server error fetching Novus token" });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     // Development Mode

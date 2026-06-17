@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { LearningSession, Flashcard, QuizQuestion, VideoItem } from "../types";
 import { CompactMarkdown } from "./HobbyCuriosityPlan";
+import { trackQuizSubmitted } from "../utils/pendo";
 
 interface ActiveSessionStudyProps {
   session: LearningSession;
@@ -138,6 +139,9 @@ export default function ActiveSessionStudy({
       quizScore: score,
       userQuizAnswers: selectedAnswers
     });
+
+    // Track Quiz Submitted
+    trackQuizSubmitted(session.planId || '', session.id, score, quizList.length);
   };
 
   const handleCompleteSession = async () => {

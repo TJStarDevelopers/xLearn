@@ -6,6 +6,7 @@ import {
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { doc, getDoc, setDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { SystemAnalytics, LearningPlan, LearningSession } from "../types";
+import { trackAIDiagnosticRequested } from "../utils/pendo";
 
 interface AIPerformanceCoachProps {
   userId: string;
@@ -121,6 +122,9 @@ export default function AIPerformanceCoach({ userId, plans }: AIPerformanceCoach
   const handleRequestDiagnostics = async () => {
     setLoading(true);
     setError(null);
+    
+    // Track AI Diagnostic Requested
+    trackAIDiagnosticRequested(userId);
 
     try {
       // Collect study history to submit to coaching API

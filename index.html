@@ -8,6 +8,27 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Novus.ai (Pendo) Analytics SDK -->
+    <script>
+      (function() {
+        // Initialize Pendo SDK with proper error handling
+        window.pendo = window.pendo || {};
+        
+        // Load Pendo SDK from official CDN
+        const script = document.createElement('script');
+        script.src = 'https://cdn.pendo.io/pendo.js';
+        script.async = true;
+        script.onload = function() {
+          console.log('[Novus] Pendo SDK loaded successfully');
+          // SDK initialization happens after token fetch in pendo.ts
+        };
+        script.onerror = function() {
+          console.error('[Novus] Failed to load Pendo SDK');
+        };
+        document.head.appendChild(script);
+      })();
+    </script>
   </body>
 </html>
 
