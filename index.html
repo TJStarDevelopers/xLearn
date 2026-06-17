@@ -8,6 +8,26 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Novus.ai Analytics -->
+    <script>
+      (function(apiKey) {
+        window.pendo = window.pendo || {};
+        window.pendo.apiKey = apiKey;
+        
+        let script = document.createElement('script');
+        script.src = 'https://pendo.novus.ai/static/pendo.js';
+        script.async = true;
+        
+        script.onload = function() {
+          if (window.pendo && window.pendo.initialize) {
+            window.pendo.initialize();
+          }
+        };
+        
+        document.head.appendChild(script);
+      })('novus_xlearn_project_key');
+    </script>
   </body>
 </html>
 

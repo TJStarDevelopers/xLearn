@@ -9,6 +9,11 @@ import {
   doc, setDoc, getDoc, getDocs, collection, query, where, orderBy, updateDoc 
 } from "firebase/firestore";
 import { 
+  initializePendo, trackPlanCreated, trackPlanOpened, trackSessionStarted, 
+  trackSessionContentGenerated, trackQuizSubmitted, trackSessionCompleted, 
+  trackCourseCompleted, trackAIDiagnosticRequested 
+} from "./utils/pendo";
+import { 
   BookOpen, Compass, Plus, LogOut, GraduationCap, Sparkles, 
   Layers, Trophy, ChevronRight, ChevronLeft, CheckCircle2, Circle, Clock, Activity, AlertTriangle, Lock
 } from "lucide-react";
@@ -50,6 +55,9 @@ export default function App() {
       setUser(currentUser);
       setAuthLoading(false);
       if (currentUser) {
+        // Initialize Pendo with user metadata
+        initializePendo(currentUser.uid, currentUser.email, currentUser.displayName);
+        
         // Save/Sync user profile in Firestore
         const userDocPath = `users/${currentUser.uid}`;
         try {
@@ -184,6 +192,8 @@ export default function App() {
 
       try {
         await setDoc(doc(db, planDocPath), planData);
+        // Track Plan Created event
+        trackPlanCreated(generatedPlanId, newTopic, newType, newTimeframe);
       } catch (err) {
         handleFirestoreError(err, OperationType.CREATE, planDocPath);
       }
@@ -282,6 +292,8 @@ export default function App() {
   const handleOpenPlan = async (plan: LearningPlan) => {
     setSelectedPlan(plan);
     setActiveSession(null);
+    // Track Plan Opened event
+    trackPlanOpened(plan.id, plan.topic);
     if (plan.type === "skill" || plan.type === "academic") {
       setSessionsLoading(true);
       const sessionsPath = `plans/${plan.id}/sessions`;
@@ -322,6 +334,8 @@ export default function App() {
     if (!selectedPlan || !activeSession) return;
 
     setIsGeneratingCurrent(true);
+    // Track Session Started event
+    trackSessionStarted(selectedPlan.id, activeSession.id, activeSession.title);
     try {
       const res = await fetch("/api/generate-session-details", {
         method: "POST",
@@ -354,6 +368,9 @@ export default function App() {
       const updatedSess = { ...activeSession, ...fieldsToSave } as LearningSession;
       setActiveSession(updatedSess);
       setSessions((prev) => prev.map((s) => s.id === activeSession.id ? updatedSess : s));
+
+      // Track Session Content Generated
+      trackSessionContentGenerated(selectedPlan.id, activeSession.id, 'study-materials');
 
       alert("Wonderful! Session study materials have been compiled successfully.");
     } catch (err) {
@@ -429,6 +446,10 @@ export default function App() {
 
         setSelectedPlan(prev => prev ? { ...prev, currentSessionNumber: nextOrder } : null);
         setActiveSession(updatedNextSession); // Transition seamlessly to the next study deck
+        
+        // Track Session Completed
+        trackSessionCompleted(selectedPlan.id, activeSession.id, activeSession.title);
+        
         alert(`Awesome job clearing session ${currentOrder}! Session ${nextOrder} is now unlocked and fully documented.`);
 
       } catch (err) {
@@ -448,6 +469,10 @@ export default function App() {
         setSessions(prev => prev.map(s => s.id === activeSession.id ? { ...s, status: 'completed' } as LearningSession : s));
         setActiveSession(null);
         setShowAnalysisOfPlanId(selectedPlan.id);
+        
+        // Track Course Completed
+        trackCourseCompleted(selectedPlan.id, selectedPlan.topic, selectedPlan.totalSessions);
+        
         alert("🎉 INCREDIBLE ACHIEVEMENT! You have cleared all sequential evaluations and completed this entire curriculum!");
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `plans/${selectedPlan.id}`);
