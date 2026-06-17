@@ -192,8 +192,10 @@ export default function App() {
 
       try {
         await setDoc(doc(db, planDocPath), planData);
-        // Track Plan Created event
-        trackPlanCreated(generatedPlanId, newTopic, newType, newTimeframe);
+        // Track Plan Created event (fire and forget with error logging)
+        trackPlanCreated(generatedPlanId, newTopic, newType, newTimeframe).catch(err => 
+          console.error('[App] Plan Created tracking failed:', err)
+        );
       } catch (err) {
         handleFirestoreError(err, OperationType.CREATE, planDocPath);
       }
@@ -292,8 +294,10 @@ export default function App() {
   const handleOpenPlan = async (plan: LearningPlan) => {
     setSelectedPlan(plan);
     setActiveSession(null);
-    // Track Plan Opened event
-    trackPlanOpened(plan.id, plan.topic);
+    // Track Plan Opened event (fire and forget)
+    trackPlanOpened(plan.id, plan.topic).catch(err => 
+      console.error('[App] Plan Opened tracking failed:', err)
+    );
     if (plan.type === "skill" || plan.type === "academic") {
       setSessionsLoading(true);
       const sessionsPath = `plans/${plan.id}/sessions`;
@@ -334,8 +338,10 @@ export default function App() {
     if (!selectedPlan || !activeSession) return;
 
     setIsGeneratingCurrent(true);
-    // Track Session Started event
-    trackSessionStarted(selectedPlan.id, activeSession.id, activeSession.title);
+    // Track Session Started event (fire and forget)
+    trackSessionStarted(selectedPlan.id, activeSession.id, activeSession.title).catch(err => 
+      console.error('[App] Session Started tracking failed:', err)
+    );
     try {
       const res = await fetch("/api/generate-session-details", {
         method: "POST",
@@ -369,8 +375,10 @@ export default function App() {
       setActiveSession(updatedSess);
       setSessions((prev) => prev.map((s) => s.id === activeSession.id ? updatedSess : s));
 
-      // Track Session Content Generated
-      trackSessionContentGenerated(selectedPlan.id, activeSession.id, 'study-materials');
+      // Track Session Content Generated (fire and forget)
+      trackSessionContentGenerated(selectedPlan.id, activeSession.id, 'study-materials').catch(err => 
+        console.error('[App] Session Content Generated tracking failed:', err)
+      );
 
       alert("Wonderful! Session study materials have been compiled successfully.");
     } catch (err) {
@@ -447,8 +455,10 @@ export default function App() {
         setSelectedPlan(prev => prev ? { ...prev, currentSessionNumber: nextOrder } : null);
         setActiveSession(updatedNextSession); // Transition seamlessly to the next study deck
         
-        // Track Session Completed
-        trackSessionCompleted(selectedPlan.id, activeSession.id, activeSession.title);
+        // Track Session Completed (fire and forget)
+        trackSessionCompleted(selectedPlan.id, activeSession.id, activeSession.title).catch(err => 
+          console.error('[App] Session Completed tracking failed:', err)
+        );
         
         alert(`Awesome job clearing session ${currentOrder}! Session ${nextOrder} is now unlocked and fully documented.`);
 
@@ -470,8 +480,10 @@ export default function App() {
         setActiveSession(null);
         setShowAnalysisOfPlanId(selectedPlan.id);
         
-        // Track Course Completed
-        trackCourseCompleted(selectedPlan.id, selectedPlan.topic, selectedPlan.totalSessions);
+        // Track Course Completed (fire and forget)
+        trackCourseCompleted(selectedPlan.id, selectedPlan.topic, selectedPlan.totalSessions).catch(err => 
+          console.error('[App] Course Completed tracking failed:', err)
+        );
         
         alert("🎉 INCREDIBLE ACHIEVEMENT! You have cleared all sequential evaluations and completed this entire curriculum!");
       } catch (err) {

@@ -123,8 +123,10 @@ export default function AIPerformanceCoach({ userId, plans }: AIPerformanceCoach
     setLoading(true);
     setError(null);
     
-    // Track AI Diagnostic Requested
-    trackAIDiagnosticRequested(userId);
+    // Track AI Diagnostic Requested (fire and forget)
+    trackAIDiagnosticRequested(userId).catch(err => 
+      console.error('[AIPerformanceCoach] AI Diagnostic tracking failed:', err)
+    );
 
     try {
       // Collect study history to submit to coaching API
