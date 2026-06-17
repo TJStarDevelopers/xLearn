@@ -897,6 +897,50 @@ app.post("/api/novus-token", async (req, res) => {
   }
 });
 
+// Novus Event Tracking Endpoint - Relay events to Novus API
+app.post("/api/novus-track", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing or invalid authorization header" });
+    }
+
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    const { event, properties } = req.body;
+
+    if (!event) {
+      return res.status(400).json({ error: "Event name is required" });
+    }
+
+    // Send event to Novus API
+    const trackResponse = await fetch("https://novus-api.pendo.io/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        eventName: event,
+        eventData: properties || {},
+        appId: "4798289792925696"
+      })
+    });
+
+    if (!trackResponse.ok) {
+      const errorText = await trackResponse.text();
+      console.error("[Novus] Event tracking failed:", trackResponse.status, errorText);
+      // Still return 200 to client so it doesn't retry
+      return res.status(200).json({ warning: "Event sent but Novus API returned error", error: errorText });
+    }
+
+    console.log("[Novus] Event tracked successfully:", event);
+    return res.status(200).json({ success: true, event });
+  } catch (error: any) {
+    console.error("[Novus] Event tracking endpoint error:", error);
+    return res.status(200).json({ error: "Server error tracking event", details: error.message });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     // Development Mode

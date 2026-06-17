@@ -1,28 +1,26 @@
 /**
  * Novus.ai (Pendo) Analytics Tracking Utility
- * Properly authenticated and configured tracking for xLearn
+ * Uses Novus REST API for event tracking with server-side authentication
  */
 
-// Declare Pendo on window
 declare global {
   interface Window {
     pendo?: any;
   }
 }
 
-// Get the global pendo object
-const getPendoInstance = (): any => {
-  return typeof window !== 'undefined' ? window.pendo : null;
-};
-
 // Store token globally
 let novusToken: string | null = null;
+let tokenExpiresAt: number = 0;
 
 /**
  * Fetch Novus authentication token from server
  */
 async function getNovusToken(): Promise<string> {
-  if (novusToken) {
+  const now = Date.now();
+  
+  // Return cached token if still valid
+  if (novusToken && now < tokenExpiresAt) {
     return novusToken;
   }
 
@@ -39,7 +37,9 @@ async function getNovusToken(): Promise<string> {
 
     const data = await response.json();
     novusToken = data.accessToken;
-    console.log('[Novus] Token acquired successfully');
+    // Token expires in (expiresIn - 60 seconds) to refresh before expiry
+    tokenExpiresAt = now + (data.expiresIn * 1000) - 60000;
+    console.log('[Novus] Token acquired successfully, expires in', Math.floor((tokenExpiresAt - now) / 1000), 'seconds');
     return novusToken;
   } catch (error) {
     console.error('[Novus] Error fetching token:', error);
@@ -48,7 +48,7 @@ async function getNovusToken(): Promise<string> {
 }
 
 /**
- * Initialize Pendo with user metadata and proper authentication
+ * Initialize Pendo SDK for session replay
  */
 export const initializePendo = async (userId: string, email: string | null, displayName: string | null) => {
   try {
@@ -64,60 +64,58 @@ export const initializePendo = async (userId: string, email: string | null, disp
       return;
     }
 
-    // Get authentication token
-    const token = await getNovusToken();
-    if (!token) {
-      console.warn('[Novus] Could not obtain authentication token');
-      return;
-    }
-
-    // Initialize Pendo with app ID and authentication
+    // Initialize Pendo for session replay and visitor tracking
     window.pendo.initialize({
       appId: '4798289792925696',
       visitor: {
         id: userId,
-        email: email || undefined,
-        displayName: displayName || undefined,
-        custom: {
-          authenticated: true,
-          initTimestamp: new Date().toISOString()
-        }
+        email: email || 'unknown',
+        displayName: displayName || 'User'
       },
-      // Use authenticated session
-      _authToken: token,
-      enableLogging: true
+      account: {
+        id: 'xlearn-app'
+      }
     });
 
-    console.log('[Novus] Pendo initialized with user:', userId);
+    console.log('[Novus] Pendo initialized for user:', userId);
   } catch (error) {
     console.error('[Novus] Initialization error:', error);
   }
 };
 
 /**
- * Track a generic event with Novus
+ * Track a generic event with Novus via REST API
  */
 export const trackEvent = async (eventName: string, properties?: Record<string, any>) => {
   try {
-    const pendo = getPendoInstance();
-    if (!pendo || !pendo.track) {
-      console.warn(`[Novus] Pendo not ready. Event queued: ${eventName}`, properties);
-      return;
-    }
-
-    // Send event to Novus with token authorization
     const token = await getNovusToken();
     if (!token) {
       console.warn('[Novus] No token available for event tracking');
       return;
     }
 
-    // Use Pendo's track method with authentication headers
-    pendo.track(eventName, {
-      ...properties,
-      _authToken: token,
-      timestamp: new Date().toISOString()
+    const eventPayload = {
+      event: eventName,
+      properties: {
+        ...properties,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    // Send event directly to Novus API via server endpoint
+    const response = await fetch('/api/novus-track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(eventPayload)
     });
+
+    if (!response.ok) {
+      console.error(`[Novus] Event tracking failed for ${eventName}:`, response.statusText);
+      return;
+    }
 
     console.log(`[Novus] Event tracked: ${eventName}`, properties);
   } catch (error) {

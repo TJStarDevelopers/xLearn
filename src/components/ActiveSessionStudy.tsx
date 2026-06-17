@@ -140,8 +140,10 @@ export default function ActiveSessionStudy({
       userQuizAnswers: selectedAnswers
     });
 
-    // Track Quiz Submitted
-    trackQuizSubmitted(session.planId || '', session.id, score, quizList.length);
+    // Track Quiz Submitted (fire and forget)
+    trackQuizSubmitted(session.planId || '', session.id, score, quizList.length).catch(err => 
+      console.error('[ActiveSessionStudy] Quiz Submitted tracking failed:', err)
+    );
   };
 
   const handleCompleteSession = async () => {
